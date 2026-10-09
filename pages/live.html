@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#070709"><title>Live Scoreboard — The Entity Championship</title>
+  <link rel="stylesheet" href="../shared/shared.css"><script defer src="../shared/supabase-config.js"></script><script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script defer src="../shared/shared.js"></script><script defer src="../shared/live-page.js"></script>
+</head>
+<body>
+  <main class="live-shell">
+    <header class="live-heading"><div><div class="eyebrow">Dead by Daylight · Tournament broadcast</div><h1>THE ENTITY CHAMPIONSHIP</h1><div class="sub">// LIVE MATCH FEED</div></div><div class="overlay-hide"><a class="button" href="./bracket.html">Open control panel ↗</a></div></header>
+    <section class="scoreboard" id="scoreboard" aria-live="polite">
+      <div class="score-meta"><span id="round-label">AWAITING MATCH</span><span>·</span><span id="match-state">NOT STARTED</span></div>
+      <div class="teams-score">
+        <div class="live-team a"><div class="side-label">TEAM A · TOTAL MATCH POINTS</div><div class="team-name" id="team-a-name">Waiting for teams</div><div class="score" id="team-a-score">—</div><div class="team-status" id="team-a-status">No active match</div></div>
+        <div class="versus"><div class="vs">VS</div><div class="round" id="match-number">NO MATCH<br>SELECTED</div></div>
+        <div class="live-team b"><div class="side-label">TEAM B · TOTAL MATCH POINTS</div><div class="team-name" id="team-b-name">Waiting for teams</div><div class="score" id="team-b-score">—</div><div class="team-status" id="team-b-status">No active match</div></div>
+      </div>
+      <div class="score-extras"><span id="toss-detail">TOSS · NOT RECORDED</span><span id="winner-detail">WINNER · PENDING</span><span id="scenario-detail">MAP · NOT SELECTED · KILLERS · NOT LOCKED</span><span id="sync-detail">LOCAL SYNC READY</span></div>
+    </section>
+    <section class="recent overlay-hide" id="recent-section"><h2>RECENT RESULTS</h2><div id="recent-list" class="panel" style="padding:0"></div></section>
+    <footer class="footer overlay-hide"><span>THE ENTITY CHAMPIONSHIP</span><span>Live screen · updates from the control panel</span></footer>
+  </main>
+</body>
+</html>

@@ -1,0 +1,36 @@
+{
+  "rewrites": [
+    {
+      "source": "/",
+      "destination": "/pages/index.html"
+    },
+    {
+      "source": "/index.html",
+      "destination": "/pages/index.html"
+    },
+    {
+      "source": "/live.html",
+      "destination": "/pages/live.html"
+    },
+    {
+      "source": "/toss.html",
+      "destination": "/pages/toss.html"
+    },
+    {
+      "source": "/bracket.html",
+      "destination": "/pages/bracket.html"
+    },
+    {
+      "source": "/live",
+      "destination": "/pages/live.html"
+    },
+    {
+      "source": "/toss",
+      "destination": "/pages/toss.html"
+    },
+    {
+      "source": "/bracket",
+      "destination": "/pages/bracket.html"
+    }
+  ]
+}

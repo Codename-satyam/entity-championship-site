@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#070709"><title>The Entity Championship</title>
+  <link rel="stylesheet" href="../shared/shared.css">
+</head>
+<body>
+  <main class="shell">
+    <header class="topbar">
+      <a class="brand" href="./index.html"><div class="brand-mark"><span>✦</span></div><div><div class="eyebrow">Dead by Daylight · Tournament toolkit</div><h1>The Entity Championship</h1></div></a>
+      <nav class="nav" aria-label="Main navigation">
+        <a href="./index.html" class="active">Home</a><a href="./live.html">Live screen</a><a href="./toss.html">Toss</a><a href="./bracket.html">Bracket control</a>
+      </nav>
+    </header>
+    <section class="hero">
+      <div class="eyebrow">A stripped-back tournament setup</div>
+      <h2>Enter the fog.<span>Own the match.</span></h2>
+      <p>Three focused pages to run a tournament with plain HTML, CSS and JavaScript. Vercel hosts the pages while Supabase stores the tournament state and broadcasts updates to both streamers and the live overlay.</p>
+      <div class="actions"><a class="button primary" href="./bracket.html">Open tournament control →</a><a class="button" href="./live.html">Preview live screen</a></div>
+    </section>
+    <section class="feature-grid">
+      <a class="feature" href="./live.html"><div class="number">01 // BROADCAST</div><h3>Live Scoreboard</h3><p>Large team names, live points, round status, toss details and recent results. Add <span class="mono">?overlay=1</span> for a compact OBS-style overlay.</p></a>
+      <a class="feature" href="./toss.html"><div class="number">02 // MATCH CEREMONY</div><h3>Toss & Draft</h3><p>Flip the coin, alternate map bans until one realm remains, then let both teams lock a Killer from the randomized five.</p></a>
+      <a class="feature" href="./bracket.html"><div class="number">03 // MATCH OPS</div><h3>Bracket & Scoring</h3><p>Start a bracket match to run the toss and draft first. The action-based points menu opens once the map and both Killer picks are locked.</p></a>
+    </section>
+    <div class="divider"></div>
+    <div class="notice"><strong>Storage note:</strong> this first version stores tournament state in this browser's local storage and syncs other tabs of the same site origin. Configure Supabase using the included setup SQL and shared/supabase-config.js. Both streamers sign in using their authorized email addresses; the live overlay is read-only and can run on a separate device or OBS browser source.</div>
+    <footer class="footer"><span>The Entity Championship</span><span>Minimal build · Static Vercel deploy</span></footer>
+  </main>
+</body>
+</html>
