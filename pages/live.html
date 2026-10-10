@@ -6,6 +6,8 @@
   <meta name="theme-color" content="transparent">
   <title>Live Overlay — The Entity Championship</title>
   <link rel="stylesheet" href="../shared/shared.css">
+  <script defer src="../shared/supabase-config.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script defer src="../shared/shared.js"></script>
   <script defer src="../shared/scoring-engine.js"></script>
   <script defer src="../shared/live-page.js"></script>
@@ -205,6 +207,29 @@
     }
   </style>
 
+
+  <style id="live-missing-styles">
+    /* Styles for elements live.html uses that shared.css does not define. */
+    .toss-banner{display:flex;align-items:center;gap:10px;padding:8px 18px;border:1px solid rgba(244,201,93,.5);background:rgba(8,8,11,.86);color:#fff;font:700 .62rem var(--mono);letter-spacing:.12em;white-space:nowrap}
+    .toss-banner strong{font:900 1.15rem var(--display);letter-spacing:.08em;text-transform:uppercase;color:var(--gold)}
+    .toss-banner-mark{color:var(--red2)}.toss-banner-label{color:#aaaab8}.toss-banner-advantage{color:#d6d6de}
+    body.live-overlay .scoreboard{background:rgba(8,8,11,.9);border:1px solid #303039;backdrop-filter:blur(4px)}
+    .point-popups{position:absolute;top:50%;width:34%;height:0;display:flex;flex-direction:column;align-items:center;pointer-events:none}
+    .point-popups-a{left:0}.point-popups-b{right:0}
+    .point-popup{position:absolute;font:900 clamp(2.4rem,6vh,4.6rem)/1 var(--display);color:var(--green);text-shadow:0 0 22px rgba(95,224,160,.6);animation:point-pop 2.4s ease-out forwards}
+    @keyframes point-pop{0%{opacity:0;transform:translateY(24px) scale(.6)}15%{opacity:1;transform:translateY(0) scale(1.15)}70%{opacity:1}100%{opacity:0;transform:translateY(-80px) scale(1)}}
+    .win-celebration{position:absolute;inset:0;z-index:40;display:flex;align-items:center;justify-content:center;background:radial-gradient(ellipse at center,rgba(225,29,46,.28),rgba(0,0,0,.78));animation:win-in .5s ease both}
+    .win-celebration[hidden]{display:none}
+    @keyframes win-in{from{opacity:0}to{opacity:1}}
+    .win-card{text-align:center;padding:34px 70px;border:1px solid var(--red);background:rgba(8,8,11,.92)}
+    .win-kicker{font:700 .6rem var(--mono);letter-spacing:.2em;color:var(--red2)}
+    .win-title{margin-top:12px;font:900 clamp(1.4rem,3vw,2.4rem) var(--display);letter-spacing:.2em;color:#c6c6d0}
+    .win-name{margin:8px 0;font:900 clamp(2.6rem,8vw,6.5rem)/.9 var(--display);text-transform:uppercase;color:#fff;overflow-wrap:anywhere}
+    .win-subtitle{font:700 .66rem var(--mono);letter-spacing:.2em;color:var(--gold)}
+    .win-particles i{position:absolute;top:-10px;width:6px;height:14px;background:var(--gold);opacity:.9;animation:win-fall linear infinite}
+    .win-particles i:nth-child(3n){background:var(--red2)}.win-particles i:nth-child(3n+1){background:#fff}
+    @keyframes win-fall{to{transform:translateY(110vh) rotate(540deg)}}
+  </style>
 </head>
 <body class="live-overlay">
   <main class="live-shell" aria-label="The Entity Championship live overlay">

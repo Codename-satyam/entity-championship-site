@@ -51,7 +51,7 @@
     $('bracket-status').className = champion ? 'status completed' : 'status in_progress';
     const rounds = [...new Set(state.matches.map((m) => m.roundIndex))].sort((a, b) => a - b);
     root.innerHTML = `<div class="bracket-scroll"><div class="bracket-rounds">${rounds.map((round) => {
-      const items = state.matches.filter((m) => m.roundIndex === round).sort((a,b) => a.matchNumber-b.matchNumber);
+      const items = state.matches.filter((m) => m.roundIndex === round && m.status !== 'bye').sort((a,b) => a.matchNumber-b.matchNumber);
       const roundName = items[0]?.roundName || `ROUND ${round + 1}`;
       return `<div class="bracket-round"><div class="round-head">${esc(roundName)} <span class="muted mono" style="font-size:.55rem">// ${items.length} MATCH${items.length===1?'':'ES'}</span></div>${items.map((m) => {
         const isSelected = m.id === selectedId;
@@ -152,9 +152,12 @@
     const generatorButtons = presetButtons('generatorsCompleted', [0,1,2,3,4,5], game.generatorsCompleted, (value) => {
       return `<b>${value} GEN${value===1?'':'S'}</b><small>Survivor +${value}<br>Killer +${5-value}</small>`;
     }, 'generators-preset');
-    const escapeButtons = presetButtons('exitEscapes', [0,1,2,3,4], game.exitEscapes, (value) => `<b>${value}</b><small>+${value} PT${value===1?'':'S'}</small>`, '', game.started);
-    const killButtons = presetButtons('kills', [0,1,2,3,4], game.kills, (value) => `<b>${value}</b><small>+${value} PT${value===1?'':'S'}</small>`, '', game.started);
-    const hookButtons = presetButtons('hooks', Array.from({length:13}, (_, i) => i), game.hooks, (value) => `<b>${value}</b><small>+${fmt(value*0.5)}</small>`, 'hooks-preset', game.started);
+    const ptLabel = (n) => `<b>${n}</b><small>+${n} PT${n===1?'':'S'}</small>`;
+    const escapeButtons = presetButtons('exitEscapes', [0,1,2,3,4], game.exitEscapes, ptLabel, '', game.started);
+    const hatchEscapeButtons = presetButtons('hatchEscapes', [0,1], game.hatchEscapes, (value) => `<b>${value}</b><small>+${value*2} PTS</small>`, '', game.started);
+    const unhookButtons = presetButtons('unhooks', [0,1,2,3,4,5,6,7,8], game.unhooks, ptLabel, 'hooks-preset', game.started);
+    const killButtons = presetButtons('kills', [0,1,2,3,4], game.kills, ptLabel, '', game.started);
+    const hookButtons = presetButtons('hooks', [0,1,2,3,4,5,6,7,8], game.hooks, ptLabel, 'hooks-preset', game.started);
     const killerGenValue = game.generatorsCompleted == null ? 'Choose gens' : `${5-game.generatorsCompleted} remaining · +${5-game.generatorsCompleted} pts`;
 
     $('scoring-modal-content').innerHTML = `
@@ -166,27 +169,28 @@
         <button type="button" class="score-tab ${scoringGameNo===1?'active':''} ${card.game1.confirmed?'confirmed':''}" data-score-action="game" data-game="1"><b>GAME 1</b><small>${esc(Entity.teamName(state,match.teamAId))} Killer · ${esc(Entity.teamName(state,match.teamBId))} Survivor</small><span>${card.game1.confirmed?'CONFIRMED':'INCOMPLETE'}</span></button>
         <button type="button" class="score-tab ${scoringGameNo===2?'active':''} ${card.game2.confirmed?'confirmed':''}" data-score-action="game" data-game="2" ${!gameOneReady?'disabled':''}><b>GAME 2</b><small>${esc(Entity.teamName(state,match.teamBId))} Killer · ${esc(Entity.teamName(state,match.teamAId))} Survivor</small><span>${card.game2.confirmed?'CONFIRMED':gameOneReady?'INCOMPLETE':'LOCKED · FINISH GAME 1'}</span></button>
       </div>
-      <div class="scoring-rule-strip"><span>SCORING IS ACTION-BASED</span><span>Survivor: max 10</span><span>Killer: max 10 base + up to 6 hook bonus</span></div>
+      <div class="scoring-rule-strip"><span>SCORING IS ACTION-BASED</span><span>Survivor: max 18</span><span>Killer: max 19</span></div>
       <div class="scoring-role-heading"><span class="role-survivor">SURVIVOR</span><b>${esc(survivorName)}</b><span class="role-killer">KILLER</span><b>${esc(killerName)}</b></div>
       <div class="scoring-grid">
         <section class="scoring-side survivor-side">
-          <div class="scoring-side-title"><span class="role-index">01</span><div><h3>Survivor points</h3><p>10-point base system</p></div><strong class="side-total">${fmt(roundResult.survivorScore)}</strong></div>
+          <div class="scoring-side-title"><span class="role-index">01</span><div><h3>Survivor points</h3><p>18-point system</p></div><strong class="side-total">${fmt(roundResult.survivorScore)}</strong></div>
           <div class="score-category"><div class="category-head"><b>Generators completed</b><span>1 PT EACH · MAX 5</span></div><p class="hint">Select the completed generator count. Killer remaining-generator points are calculated automatically from the same result.</p>${generatorButtons}</div>
-          <div class="score-category"><div class="category-head"><b>Exit-gate escapes</b><span>1 PT EACH · MAX 4</span></div>${escapeButtons}</div>
-          <div class="score-category"><div class="category-head"><b>Hatch escape</b><span>+1 BONUS PT</span></div>${togglePreset('hatch', game.hatch, 'Hatch escape confirmed', 'Adds 1 point separately from exit-gate escapes')}</div>
+          <div class="score-category"><div class="category-head"><b>Exit-gate escapes</b><span>1 PT EACH</span></div>${escapeButtons}</div>
+          <div class="score-category"><div class="category-head"><b>Hatch escape</b><span>2 PTS EACH · ESCAPES CAP AT 5</span></div><p class="hint">Gate and hatch points share one Escape category (max 5 points).</p>${hatchEscapeButtons}</div>
+          <div class="score-category"><div class="category-head"><b>Successful unhooks</b><span>1 PT EACH · MAX 8</span></div>${unhookButtons}</div>
         </section>
         <section class="scoring-side killer-side">
-          <div class="scoring-side-title"><span class="role-index">02</span><div><h3>Killer points</h3><p>10 base points + hook bonus</p></div><strong class="side-total">${fmt(roundResult.killerScore)}</strong></div>
+          <div class="scoring-side-title"><span class="role-index">02</span><div><h3>Killer points</h3><p>19-point system</p></div><strong class="side-total">${fmt(roundResult.killerScore)}</strong></div>
           <div class="score-category killer-gens"><div class="category-head"><b>Generators remaining</b><span>1 PT EACH · MAX 5</span></div><div class="derived-value">${esc(killerGenValue)}</div><p class="hint">Derived from completed generators above to prevent conflicting entries.</p></div>
           <div class="score-category"><div class="category-head"><b>Survivors killed</b><span>1 PT EACH · MAX 4</span></div>${killButtons}</div>
-          <div class="score-category"><div class="category-head"><b>All 4 kills before endgame</b><span>+1 BONUS PT</span></div>${togglePreset('allKillsBeforeEndgame', game.allKillsBeforeEndgame, '4K before endgame', game.kills===4?'Valid only when all 4 kills occurred before endgame':'Select 4 kills first to unlock this bonus', game.kills!==4)}</div>
-          <div class="score-category"><div class="category-head"><b>Hooks</b><span>0.5 PT PER HOOK · UP TO 12</span></div><p class="hint">Choose the total number of survivor hook events for this game.</p>${hookButtons}</div>
+          <div class="score-category"><div class="category-head"><b>Hooks</b><span>1 PT PER HOOK EVENT · MAX 8</span></div>${hookButtons}</div>
+          <div class="score-category"><div class="category-head"><b>Hatch closed</b><span>+2 PTS</span></div>${togglePreset('hatchClosed', game.hatchClosed, 'Killer closed the hatch', 'Kept even if a survivor later escapes through it')}</div>
         </section>
       </div>
       <section class="score-summary">
-        <div class="summary-column"><small>THIS GAME · SURVIVOR</small><strong>${fmt(roundResult.survivorScore)}</strong><span>${roundResult.breakdown.generatorsSelected?`${roundResult.breakdown.generators} gen`:'Generators not selected'} · ${roundResult.breakdown.escapes} escape · hatch ${roundResult.breakdown.hatch?'yes':'no'}</span></div>
+        <div class="summary-column"><small>THIS GAME · SURVIVOR</small><strong>${fmt(roundResult.survivorScore)}</strong><span>${roundResult.breakdown.generatorsSelected?`${roundResult.breakdown.generators} gens`:'Generators not selected'} · ${roundResult.breakdown.escapePoints} escape pts · ${roundResult.breakdown.unhooks} unhooks</span></div>
         <div class="summary-vs">VS</div>
-        <div class="summary-column killer-summary"><small>THIS GAME · KILLER</small><strong>${fmt(roundResult.killerScore)}</strong><span>${roundResult.breakdown.generatorsSelected?`${roundResult.breakdown.remainingGenerators} gens left`:'Generators not selected'} · ${roundResult.breakdown.kills} kills · ${roundResult.breakdown.hooks} hooks (+${fmt(roundResult.breakdown.hookPoints)})${roundResult.breakdown.early4K? ' · early 4K +1':''}</span></div>
+        <div class="summary-column killer-summary"><small>THIS GAME · KILLER</small><strong>${fmt(roundResult.killerScore)}</strong><span>${roundResult.breakdown.generatorsSelected?`${roundResult.breakdown.remainingGenerators} gens left`:'Generators not selected'} · ${roundResult.breakdown.kills} kills · ${roundResult.breakdown.hooks} hooks${roundResult.breakdown.hatchClosed?' · hatch closed +2':''}</span></div>
         <div class="match-total-band"><span>MATCH TOTAL · ${esc(Entity.teamName(state,match.teamAId))}</span><b>${fmt(result.teamA)}</b><span>MATCH TOTAL · ${esc(Entity.teamName(state,match.teamBId))}</span><b>${fmt(result.teamB)}</b></div>
       </section>
       ${bothConfirmed && isTied ? `<div class="tie-break-panel"><label for="modal-tie-winner">Match total is tied. Select the tiebreak winner to advance.</label><select id="modal-tie-winner"><option value="">Choose tiebreak winner</option><option value="${match.teamAId}" ${match.tiebreakWinnerId===match.teamAId?'selected':''}>${esc(Entity.teamName(state,match.teamAId))}</option><option value="${match.teamBId}" ${match.tiebreakWinnerId===match.teamBId?'selected':''}>${esc(Entity.teamName(state,match.teamBId))}</option></select></div>` : ''}
@@ -211,7 +215,7 @@
       const url = new URL('./toss.html', window.location.href);
       url.searchParams.set('match', id);
       url.searchParams.set('next', 'scoring');
-      window.location.href = url.href;
+      Entity.flush().then(() => { window.location.href = url.href; });
     } catch (err) { showFeedback(err.message || 'Could not open match setup.', true); }
   }
 
@@ -261,7 +265,7 @@
     if (existingGame.started && existingGame[field] === val) return;
     updateScoring((card) => {
       const game = card[scoringGameNo === 1 ? 'game1' : 'game2'];
-      const nextValue = field === 'hatch' || field === 'allKillsBeforeEndgame' ? Boolean(val) : val;
+      const nextValue = field === 'hatchClosed' ? Boolean(val) : val;
       if (game[field] === nextValue && game.started) return;
       game[field] = nextValue;
       game.started = true;
@@ -375,7 +379,7 @@
 
   $('reset-btn').addEventListener('click', () => {
     if (!window.confirm('Delete all teams, matches, scores and toss data for this browser?')) return;
-    const state = currentState();
+    const state = JSON.parse(JSON.stringify(currentState()));
     state.teams = []; state.matches = []; state.activeMatchId = null; state.generated = false;
     Entity.save(state); selectedId = null; closeScoringMenu(); showFeedback('Tournament data reset.', false); render();
   });

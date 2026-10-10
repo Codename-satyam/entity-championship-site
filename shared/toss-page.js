@@ -200,7 +200,7 @@
     const url = new URL('./bracket.html', window.location.href);
     url.searchParams.set('match', selectedId);
     url.searchParams.set('openScoring', '1');
-    window.location.href = url.href;
+    Entity.flush().then(() => { window.location.href = url.href; });
   }
 
   function flipToss() {

@@ -10,6 +10,7 @@
   let currentUser = null;
   let cloudStatus = 'Starting…';
   let writeQueue = Promise.resolve();
+  let pendingWrites = 0;
   let latestRemoteTimestamp = 0;
   let remoteRevision = 0;
   let authWidget = null;
@@ -141,7 +142,8 @@
     if (!isAdmin) throw new Error('Sign in with an authorized streamer account before changing tournament state.');
     // Compare-and-swap prevents one streamer's stale browser from silently overwriting
     // a change another streamer saved moments earlier.
-    writeQueue = writeQueue.then(async () => {
+    pendingWrites++;
+    const run = writeQueue.catch(() => {}).then(async () => {
       const expectedRevision = remoteRevision;
       const { data, error } = await supabaseClient.rpc('save_tournament_state', {
         p_state: state,
@@ -160,13 +162,14 @@
       latestRemoteTimestamp = Date.parse(data.updated_at || '') || Date.now();
       showCloudMessage('Saved · live sync active');
     });
-    try { await writeQueue; }
+    writeQueue = run;
+    try { await run; }
     catch (err) {
       showCloudMessage(`Save error: ${err.message || 'database write failed'}`, true);
       // If a concurrent save won, re-fetch the canonical state so this tab is not left stale.
       fetchRemoteState().catch(() => {});
       throw err;
-    }
+    } finally { pendingWrites--; }
   }
   function save(state) {
     if (supabaseClient && !isAdmin) {
@@ -179,7 +182,7 @@
     return state;
   }
   function update(mutator) {
-    const state = load();
+    const state = JSON.parse(JSON.stringify(load()));
     mutator(state);
     return save(state);
   }
@@ -196,6 +199,19 @@
       if (channel) channel.removeEventListener('message', onChannel);
     };
   }
+  function randInt(max) {
+    if (window.crypto && crypto.getRandomValues) {
+      const limit = Math.floor(4294967296 / max) * max; const buf = new Uint32Array(1);
+      do { crypto.getRandomValues(buf); } while (buf[0] >= limit);
+      return buf[0] % max;
+    }
+    return Math.floor(Math.random() * max);
+  }
+  function shuffle(items) {
+    const a = items.slice();
+    for (let i = a.length - 1; i > 0; i--) { const j = randInt(i + 1); [a[i], a[j]] = [a[j], a[i]]; }
+    return a;
+  }
   function uid(prefix) { return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`; }
   function teamName(state, id) { if (!id) return 'TBD'; const team = state.teams.find((item) => item.id === id); return team ? team.name : 'TBD'; }
   function roundName(index, total) { if (index === total - 1) return 'FINAL'; if (index === total - 2) return 'SEMIFINAL'; if (index === total - 3) return 'QUARTERFINAL'; return `ROUND ${index + 1}`; }
@@ -206,21 +222,61 @@
   }
   function buildBracket(names) {
     const clean = []; const seen = new Set();
-    names.forEach((raw) => { const name = String(raw || '').trim(); const key = name.toLocaleLowerCase(); if (name && !seen.has(key)) { seen.add(key); clean.push({ id: uid('team'), name }); } });
+    names.forEach((raw) => {
+      const name = String(raw || '').trim();
+      const key = name.toLocaleLowerCase();
+      if (name && !seen.has(key)) { seen.add(key); clean.push({ id: uid('team'), name }); }
+    });
     if (clean.length < 2) throw new Error('Enter at least two distinct team names.');
-    const bracketSize = 2 ** Math.ceil(Math.log2(clean.length)); const roundCount = Math.log2(bracketSize); const base = uid('bracket'); const matches = [];
+
+    const bracketSize = 2 ** Math.ceil(Math.log2(clean.length));
+    const roundCount = Math.log2(bracketSize);
+    const firstRoundMatchCount = bracketSize / 2;
+    const playInCount = clean.length - firstRoundMatchCount; // teams beyond one-per-slot
+    const base = uid('bracket');
+    const matches = [];
+    // Unbiased Fisher-Yates shuffle (the old sort(() => Math.random()-0.5) is biased).
+    const order = shuffle(clean);
+
+    // Randomly choose which first-round slots are full matches (play-ins).
+    // Every other slot is a single-team BYE. All teams are always placed.
+    const playInSlots = new Set(clean.length === bracketSize
+      ? Array.from({ length: firstRoundMatchCount }, (_, i) => i)
+      : shuffle(Array.from({ length: firstRoundMatchCount }, (_, i) => i)).slice(0, playInCount));
+    const firstRoundSlots = Array.from({ length: firstRoundMatchCount }, () => ({ a: null, b: null }));
+    let teamIndex = 0;
+    for (let slot = 0; slot < firstRoundMatchCount; slot++) {
+      firstRoundSlots[slot].a = order[teamIndex++].id;
+      if (playInSlots.has(slot)) firstRoundSlots[slot].b = order[teamIndex++].id;
+    }
+
     for (let roundIndex = 0; roundIndex < roundCount; roundIndex++) {
       const count = bracketSize / (2 ** (roundIndex + 1));
-      for (let slot = 0; slot < count; slot++) matches.push({
-        id: `${base}-r${roundIndex + 1}-m${slot + 1}`, roundIndex, roundName: roundName(roundIndex, roundCount), matchNumber: slot + 1,
-        teamAId: roundIndex === 0 ? (clean[slot * 2]?.id || null) : null, teamBId: roundIndex === 0 ? (clean[slot * 2 + 1]?.id || null) : null,
-        sourceAId: roundIndex > 0 ? `${base}-r${roundIndex}-m${slot * 2 + 1}` : null, sourceBId: roundIndex > 0 ? `${base}-r${roundIndex}-m${slot * 2 + 2}` : null,
-        parentMatchId: roundIndex < roundCount - 1 ? `${base}-r${roundIndex + 2}-m${Math.floor(slot / 2) + 1}` : null,
-        parentSlot: roundIndex < roundCount - 1 ? (slot % 2 === 0 ? 'a' : 'b') : null,
-        scoreA: null, scoreB: null, status: 'pending', winnerId: null, toss: null, mapVeto: null, killerDraft: null, setupComplete: false, scorecard: null, tiebreakWinnerId: null
-      });
+      for (let slot = 0; slot < count; slot++) {
+        const isFirstRound = roundIndex === 0;
+        const first = isFirstRound ? firstRoundSlots[slot] : null;
+        const match = {
+          id: `${base}-r${roundIndex + 1}-m${slot + 1}`,
+          roundIndex,
+          roundName: roundIndex === 0 && clean.length !== bracketSize ? 'PRELIMINARY' : roundName(roundIndex, roundCount),
+          matchNumber: slot + 1,
+          teamAId: isFirstRound ? (first?.a || null) : null,
+          teamBId: isFirstRound ? (first?.b || null) : null,
+          sourceAId: roundIndex > 0 ? `${base}-r${roundIndex}-m${slot * 2 + 1}` : null,
+          sourceBId: roundIndex > 0 ? `${base}-r${roundIndex}-m${slot * 2 + 2}` : null,
+          parentMatchId: roundIndex < roundCount - 1 ? `${base}-r${roundIndex + 2}-m${Math.floor(slot / 2) + 1}` : null,
+          parentSlot: roundIndex < roundCount - 1 ? (slot % 2 === 0 ? 'a' : 'b') : null,
+          scoreA: null, scoreB: null, status: 'pending', winnerId: null, toss: null,
+          mapVeto: null, killerDraft: null, setupComplete: false, scorecard: null, tiebreakWinnerId: null
+        };
+        if (isFirstRound && (!match.teamAId || !match.teamBId)) {
+          match.status = 'bye';
+          match.winnerId = match.teamAId || match.teamBId || null;
+        }
+        matches.push(match);
+      }
     }
-    matches.filter((m) => m.roundIndex === 0).forEach((m) => { if (!m.teamAId || !m.teamBId) { m.status = 'bye'; m.winnerId = m.teamAId || m.teamBId || null; } });
+
     const state = { ...emptyState(), teams: clean, matches, generated: true, activeMatchId: null };
     propagateAdvances(state);
     const firstPlayable = state.matches.find((m) => m.status === 'pending' && m.teamAId && m.teamBId);
@@ -280,6 +336,7 @@
     if (!row || !row.state) return;
     const ts = Date.parse(row.updated_at || row.state.updatedAt || '') || Date.now();
     const revision = Number(row.revision) || remoteRevision;
+    if (pendingWrites > 0) return; // our own queued save will overwrite; don't clobber newer local edits with an echo
     if (revision < remoteRevision || ts < latestRemoteTimestamp) return;
     latestRemoteTimestamp = ts;
     remoteRevision = revision;
@@ -306,7 +363,7 @@
   }
   window.Entity = {
     STORAGE_KEY, load, save, update, subscribe, uid, teamName, roundName,
-    buildBracket, propagateAdvances, setLive, savePoints, addToss, activeMatch,
+    buildBracket, shuffle, flush: () => writeQueue.catch(() => {}), propagateAdvances, setLive, savePoints, addToss, activeMatch,
     cloud: { configured: isCloudConfigured, get client() { return supabaseClient; }, get isAdmin() { return isAdmin; }, get status() { return cloudStatus; } }
   };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initCloud, { once: true }); else initCloud();
