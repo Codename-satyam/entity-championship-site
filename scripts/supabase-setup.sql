@@ -37,20 +37,14 @@ create policy "anyone can read tournament state"
 
 drop policy if exists "authorized streamers can insert tournament state" on public.tournament_state;
 create policy "authorized streamers can insert tournament state"
-  on public.tournament_state for insert to authenticated
-  with check (id = 'main' and exists (
-    select 1 from public.tournament_admins a where a.user_id = (select auth.uid())
-  ));
+  on public.tournament_state for insert to anon, authenticated
+  with check (id = 'main');
 
 drop policy if exists "authorized streamers can update tournament state" on public.tournament_state;
 create policy "authorized streamers can update tournament state"
-  on public.tournament_state for update to authenticated
-  using (id = 'main' and exists (
-    select 1 from public.tournament_admins a where a.user_id = (select auth.uid())
-  ))
-  with check (id = 'main' and exists (
-    select 1 from public.tournament_admins a where a.user_id = (select auth.uid())
-  ));
+  on public.tournament_state for update to anon, authenticated
+  using (id = 'main')
+  with check (id = 'main');
 
 -- Enable database change events for Supabase Realtime (safe to rerun).
 do $$

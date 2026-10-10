@@ -6,14 +6,12 @@
   const ROW_ID = 'main';
   let channel = null;
   let supabaseClient = null;
-  let isAdmin = false;
-  let currentUser = null;
+  let isAdmin = true;
   let cloudStatus = 'Starting…';
   let writeQueue = Promise.resolve();
   let pendingWrites = 0;
   let latestRemoteTimestamp = 0;
   let remoteRevision = 0;
-  let authWidget = null;
   try { if ('BroadcastChannel' in window) channel = new BroadcastChannel(CHANNEL_NAME); } catch (_) {}
 
   function emptyState() {
@@ -42,87 +40,14 @@
     announce();
   }
   function load() { return cachedState; }
-  function showCloudMessage(message, isError = false) {
+  function showCloudMessage(message) {
     cloudStatus = message;
-    if (authWidget) {
-      const status = authWidget.querySelector('[data-cloud-status]');
-      if (status) { status.textContent = message; status.dataset.error = isError ? 'true' : 'false'; }
-      renderAuthWidget();
-    }
     const sync = document.getElementById('sync-detail');
     if (sync) sync.textContent = `SYNC · ${message.toUpperCase()}`;
   }
   function isCloudConfigured() {
     const c = window.ENTITY_SUPABASE_CONFIG || {};
     return Boolean(c.url && c.anonKey && window.supabase && typeof window.supabase.createClient === 'function');
-  }
-  function renderAuthWidget() {
-    if (!authWidget) return;
-    const status = authWidget.querySelector('[data-cloud-status]');
-    const actions = authWidget.querySelector('[data-auth-actions]');
-    if (!status || !actions) return;
-    status.textContent = cloudStatus;
-    status.dataset.error = /error|denied|failed|not authorized/i.test(cloudStatus) ? 'true' : 'false';
-    if (!isCloudConfigured()) {
-      actions.innerHTML = '<span class="entity-auth-note">Local mode only</span>';
-      return;
-    }
-    if (!currentUser) {
-      actions.innerHTML = '<button type="button" class="entity-auth-button" data-auth-login>Streamer sign in</button>';
-      actions.querySelector('[data-auth-login]').addEventListener('click', signIn);
-      return;
-    }
-    if (!isAdmin) {
-      actions.innerHTML = '<span class="entity-auth-note">Account not authorized</span><button type="button" class="entity-auth-button" data-auth-out>Sign out</button>';
-      actions.querySelector('[data-auth-out]').addEventListener('click', signOut);
-      return;
-    }
-    actions.innerHTML = `<span class="entity-auth-note">Controller · ${escapeHtml(currentUser.email || 'authorized streamer')}</span><button type="button" class="entity-auth-button" data-auth-out>Sign out</button>`;
-    actions.querySelector('[data-auth-out]').addEventListener('click', signOut);
-  }
-  function escapeHtml(value) { return String(value ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch])); }
-  function mountAuthWidget() {
-    const path = location.pathname.toLowerCase();
-    if (path.includes('live.html') || path.includes('/live')) return;
-    if (!path.includes('toss.html') && !path.includes('bracket.html') && !path.endsWith('/toss') && !path.endsWith('/bracket')) return;
-    const shell = document.querySelector('.shell');
-    if (!shell) return;
-    authWidget = document.createElement('section');
-    authWidget.className = 'entity-auth-widget';
-    authWidget.innerHTML = '<div class="entity-auth-copy"><strong>SHARED TOURNAMENT SYNC</strong><span data-cloud-status>Connecting…</span></div><div data-auth-actions></div>';
-    shell.insertBefore(authWidget, shell.firstChild);
-    renderAuthWidget();
-  }
-  async function refreshAdminStatus() {
-    if (!supabaseClient) { isAdmin = false; currentUser = null; return; }
-    const { data: sessionData } = await supabaseClient.auth.getSession();
-    currentUser = sessionData?.session?.user || null;
-    isAdmin = false;
-    if (currentUser) {
-      const { data, error } = await supabaseClient.from('tournament_admins').select('user_id').eq('user_id', currentUser.id).maybeSingle();
-      isAdmin = !error && Boolean(data);
-      if (error) console.warn('Could not verify tournament controller access:', error.message);
-    }
-    if (currentUser && isAdmin) showCloudMessage('Connected · controller access');
-    else if (currentUser) showCloudMessage('Signed in · admin access not granted', true);
-    else showCloudMessage('Connected · sign in to control');
-    renderAuthWidget();
-  }
-  async function signIn() {
-    const email = window.prompt('Enter the email address authorized for tournament control:');
-    if (!email || !email.trim()) return;
-    showCloudMessage('Sending sign-in link…');
-    const { error } = await supabaseClient.auth.signInWithOtp({
-      email: email.trim(),
-      options: { emailRedirectTo: window.location.href.split('#')[0] }
-    });
-    if (error) showCloudMessage(`Sign-in failed: ${error.message}`, true);
-    else showCloudMessage('Check your email for the sign-in link');
-  }
-  async function signOut() {
-    const { error } = await supabaseClient.auth.signOut();
-    if (error) showCloudMessage(`Sign-out failed: ${error.message}`, true);
-    await refreshAdminStatus();
   }
   async function fetchRemoteState() {
     if (!supabaseClient) return;
@@ -133,15 +58,10 @@
       remoteRevision = Number(data.revision) || 1;
       setCache(data.state);
     }
-    if (isAdmin) showCloudMessage('Connected · controller access');
-    else if (currentUser) showCloudMessage('Signed in · admin access not granted', true);
-    else showCloudMessage('Connected · read-only until streamer sign-in');
+    showCloudMessage('Connected · controller access');
   }
   async function persistRemoteState(state) {
     if (!supabaseClient) return;
-    if (!isAdmin) throw new Error('Sign in with an authorized streamer account before changing tournament state.');
-    // Compare-and-swap prevents one streamer's stale browser from silently overwriting
-    // a change another streamer saved moments earlier.
     pendingWrites++;
     const run = writeQueue.catch(() => {}).then(async () => {
       const expectedRevision = remoteRevision;
@@ -172,10 +92,6 @@
     } finally { pendingWrites--; }
   }
   function save(state) {
-    if (supabaseClient && !isAdmin) {
-      const message = 'Both streamers must sign in with an authorized account before changing tournament state.';
-      showCloudMessage(message, true); alert(message); throw new Error(message);
-    }
     state.updatedAt = new Date().toISOString();
     setCache(state);
     if (supabaseClient) persistRemoteState(state).catch(err => console.error('Tournament cloud save failed:', err));
@@ -349,17 +265,13 @@
     const config = window.ENTITY_SUPABASE_CONFIG;
     supabaseClient = window.supabase.createClient(config.url, config.anonKey, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true } });
     showCloudMessage('Connecting to Supabase…');
-    refreshAdminStatus().then(fetchRemoteState).catch(err => showCloudMessage(`Connection error: ${err.message}`, true));
-    supabaseClient.auth.onAuthStateChange((_event, _session) => {
-      // Defer the admin query so auth event processing doesn't block Supabase's callback.
-      setTimeout(() => refreshAdminStatus().then(fetchRemoteState).catch(err => showCloudMessage(`Auth error: ${err.message}`, true)), 0);
-    });
+    fetchRemoteState().catch(err => showCloudMessage(`Connection error: ${err.message}`, true));
     supabaseClient.channel('entity-tournament-state')
       .on('postgres_changes', { event: '*', schema: 'public', table: TABLE, filter: `id=eq.${ROW_ID}` }, payload => {
         if (payload.eventType === 'DELETE') return;
         applyRemoteRow(payload.new);
       })
-      .subscribe(status => { if (status === 'SUBSCRIBED') showCloudMessage(isAdmin ? 'Connected · controller access' : 'Connected · live updates active'); });
+      .subscribe(status => { if (status === 'SUBSCRIBED') showCloudMessage('Connected · live updates active'); });
   }
   window.Entity = {
     STORAGE_KEY, load, save, update, subscribe, uid, teamName, roundName,
